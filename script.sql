@@ -171,6 +171,30 @@ SELECT
 	TO_DATE(CASE WHEN UPPER(TRIM(transaction_date)) IN ('', 'ERROR', 'UNKNOWN') THEN NULL ELSE TRIM(transaction_date) END, 'YYYY-MM-DD')
 FROM raw.cafe_sales;
 
+SELECT 'transaction_id' AS coluna, 
+    COUNT(*) - COUNT(transaction_id) AS qtd_null FROM staging.cafe_tipada;
+
+SELECT 'item',
+    COUNT(*) - COUNT(item) FROM staging.cafe_tipada;
+
+SELECT 'quantity',
+    COUNT(*) - COUNT(quantity) FROM staging.cafe_tipada;
+
+SELECT 'price_per_unit',
+    COUNT(*) - COUNT(price_per_unit) FROM staging.cafe_tipada;
+
+SELECT 'total_spent',
+    COUNT(*) - COUNT(total_spent) FROM staging.cafe_tipada;
+
+SELECT 'payment_method',
+    COUNT(*) - COUNT(payment_method) FROM staging.cafe_tipada;
+
+SELECT 'location',
+    COUNT(*) - COUNT(location) FROM staging.cafe_tipada;
+
+SELECT 'transaction_date',
+    COUNT(*) - COUNT(transaction_date) FROM staging.cafe_tipada;
+
 /*ENUNCIADO 7
 Crie a tabela staging.cardapio com as colunas item (VARCHAR(20), chave primária), price
 (NUMERIC(6,2) NOT NULL) e category (VARCHAR(10) NOT NULL) e insira nela as oito linhas
