@@ -221,3 +221,37 @@ WHERE item IS NOT NULL
 GROUP BY item;
 
 SELECT * FROM staging.cardapio;
+
+/* ENUNCIADO 8
+Aplique à tabela staging.cafe_tipada as regras da Tabela 7, na ordem indicada, com
+um UPDATE por regra (a R6 pode usar dois). Use subconsultas sobre staging.cardapio
+nas regras R1 e R5. Abaixo de cada UPDATE, registre em comentário a quantidade de linhas
+afetadas informada pelo pgAdmin.*/
+
+-- R1: preço nulo e item conhecido -> preço do item no cardápio
+UPDATE staging.cafe_tipada t
+SET    price_per_unit = (
+    SELECT c.price
+        FROM   staging.cardapio c
+        WHERE  c.item = t.item)
+WHERE  t.price_per_unit IS NULL
+  AND  t.item IN (SELECT item FROM staging.cardapio);
+-- Linhas afetadas: 479
+
+-- R2: preço nulo, quantidade e total conhecidos -> total / quantidade
+UPDATE staging.cafe_tipada
+SET price_per_unit = ROUND(total_spent / quantity, 2)
+WHERE price_per_unit IS NULL
+  AND quantity IS NOT NULL
+  AND quantity != 0
+  AND total_spent IS NOT NULL;
+-- Linhas afetadas: 48
+
+-- R3: quantidade nula, preço e total conhecidos -> total / preço, arredondado para inteiro
+UPDATE staging.cafe_tipada
+SET quantity = CAST(ROUND(total_spent / price_per_unit) AS INTEGER)
+WHERE quantity IS NULL
+  AND price_per_unit IS NOT NULL
+  AND price_per_unit != 0
+  AND total_spent IS NOT NULL;
+-- Linhas afetadas: 456
