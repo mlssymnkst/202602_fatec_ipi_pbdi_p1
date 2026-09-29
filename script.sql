@@ -11,3 +11,9 @@ devolva exatamente essas três linhas.*/
 --     LOCALE_PROVIDER = 'libc'
 --     CONNECTION LIMIT = -1
 --     IS_TEMPLATE = False;
+CREATE SCHEMA IF NOT EXISTS raw;
+CREATE SCHEMA IF NOT EXISTS staging;
+CREATE SCHEMA IF NOT EXISTS dw;
+
+SELECT schema_name
+FROM information_schema.schemata;
