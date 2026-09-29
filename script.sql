@@ -136,3 +136,37 @@ SELECT
     COUNT(*) FILTER (WHERE TRIM(transaction_date) = 'UNKNOWN') AS qtd_unknown,
     COUNT(*) FILTER (WHERE transaction_date IS NULL OR TRIM(transaction_date) = '') AS qtd_vazio
 FROM raw.cafe_sales;
+
+/* ENUNCIADO 6
+Crie staging.cafe_tipada conforme a Tabela 6 e carregue-a a partir de raw.cafe_sales
+com um único INSERT ... SELECT, precedido de TRUNCATE. Em todas as colunas, aplique
+TRIM e transforme '', 'ERROR' e 'UNKNOWN' em NULL antes de qualquer conversão; converta
+as colunas numéricas com CAST e a data com TO_DATE no formato 'YYYY-MM-DD'. Em seguida,
+escreva uma consulta que conte os NULL de cada coluna da tabela tipada. Para cada coluna,
+o total deve ser igual à soma qtd_error + qtd_unknown + qtd_vazio obtida no Enunciado
+5.*/
+
+ DROP TABLE IF EXISTS staging.cafe_tipada CASCADE;
+CREATE TABLE staging.cafe_tipada(
+	transaction_id VARCHAR (20) PRIMARY KEY,
+	item VARCHAR(20),
+	quantity INTEGER,
+	price_per_unit NUMERIC(6,2),
+	total_spent NUMERIC(8,2),
+	payment_method VARCHAR(20),
+	location VARCHAR (20),
+	transaction_date DATE
+);
+
+SELECT * FROM staging.cafe_tipada;
+INSERT INTO staging.cafe_tipada
+SELECT
+	CASE WHEN UPPER(TRIM(transaction_id)) IN ('', 'ERROR', 'UNKNOWN') THEN NULL ELSE TRIM(transaction_id) END,
+	CASE WHEN UPPER(TRIM(item)) IN ('', 'ERROR', 'UNKNOWN') THEN NULL ELSE TRIM(item) END,
+	CAST(CASE WHEN UPPER(TRIM(quantity)) IN ('', 'ERROR', 'UNKNOWN') THEN NULL ELSE TRIM(quantity) END AS INTEGER),
+	CAST(CASE WHEN UPPER(TRIM(price_per_unit)) IN ('', 'ERROR', 'UNKNOWN') THEN NULL ELSE TRIM(price_per_unit) END AS NUMERIC(6,2)),
+	CAST(CASE WHEN UPPER(TRIM(total_spent)) IN ('', 'ERROR', 'UNKNOWN') THEN NULL ELSE TRIM(total_spent) END AS NUMERIC(8,2)),
+	CASE WHEN UPPER(TRIM(payment_method)) IN ('', 'ERROR', 'UNKNOWN') THEN NULL ELSE TRIM(payment_method) END,
+	CASE WHEN UPPER(TRIM(location)) IN ('', 'ERROR', 'UNKNOWN') THEN NULL ELSE TRIM(location) END,
+	TO_DATE(CASE WHEN UPPER(TRIM(transaction_date)) IN ('', 'ERROR', 'UNKNOWN') THEN NULL ELSE TRIM(transaction_date) END, 'YYYY-MM-DD')
+FROM raw.cafe_sales;
