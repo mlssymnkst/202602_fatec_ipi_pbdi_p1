@@ -170,3 +170,30 @@ SELECT
 	CASE WHEN UPPER(TRIM(location)) IN ('', 'ERROR', 'UNKNOWN') THEN NULL ELSE TRIM(location) END,
 	TO_DATE(CASE WHEN UPPER(TRIM(transaction_date)) IN ('', 'ERROR', 'UNKNOWN') THEN NULL ELSE TRIM(transaction_date) END, 'YYYY-MM-DD')
 FROM raw.cafe_sales;
+
+/*ENUNCIADO 7
+Crie a tabela staging.cardapio com as colunas item (VARCHAR(20), chave primária), price
+(NUMERIC(6,2) NOT NULL) e category (VARCHAR(10) NOT NULL) e insira nela as oito linhas
+da Tabela 3.*/
+
+DROP TABLE IF EXISTS staging.cardapio;
+CREATE TABLE staging.cardapio(
+	item VARCHAR(20) PRIMARY KEY,
+	price NUMERIC(6,2) NOT NULL,
+	category VARCHAR(10) NOT NULL
+);
+
+INSERT INTO staging.cardapio (item, price, category)
+SELECT
+    item,
+    MAX(price_per_unit) AS price,
+    CASE
+        WHEN item IN ('Cookie', 'Cake', 'Sandwich', 'Salad') THEN 'Comida'
+        WHEN item IN ('Tea', 'Coffee', 'Juice', 'Smoothie')  THEN 'Bebida'
+    END AS category
+FROM staging.cafe_tipada
+WHERE item IS NOT NULL
+  AND price_per_unit IS NOT NULL
+GROUP BY item;
+
+SELECT * FROM staging.cardapio;
