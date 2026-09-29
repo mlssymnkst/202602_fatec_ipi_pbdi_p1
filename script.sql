@@ -45,3 +45,94 @@ SELECT * FROM raw.cafe_sales;
 
 -- Consulta valores distintos de transaction_id
 SELECT COUNT(DISTINCT transaction_id) FROM raw.cafe_sales;
+
+/*Enunciado 4 
+Para cada uma das colunas item, payment_method e location da camada raw, escreva uma
+consulta que liste cada valor distinto e a quantidade de linhas em que ele aparece, da maior
+para a menor quantidade. Os valores NULL também devem aparecer.*/
+
+-- Consulta item
+SELECT item as valor, 
+    COUNT(*) AS quantidade
+FROM raw.cafe_sales
+GROUP BY item
+ORDER BY quantidade DESC, valor;
+-- Consulta payment_method
+SELECT payment_method, 
+    COUNT(*) AS quantidade
+FROM raw.cafe_sales
+GROUP BY payment_method
+ORDER BY quantidade DESC;
+
+-- Consulta location
+SELECT location, 
+    COUNT(*) AS quantidade
+FROM raw.cafe_sales
+GROUP BY location
+ORDER BY quantidade DESC;
+
+/* ENUNCIADO 5
+Escreva uma única consulta, usando UNION ALL, que devolva uma linha para cada coluna
+da camada raw, exceto transaction_id, com quatro colunas: coluna (o nome da coluna,
+como texto), qtd_error, qtd_unknown e qtd_vazio (valor NULL ou texto vazio após TRIM).
+O resultado terá sete linhas.*/
+SELECT
+    'item' AS coluna,
+    COUNT(*) FILTER (WHERE TRIM(item) = 'ERROR') AS qtd_error,
+    COUNT(*) FILTER (WHERE TRIM(item) = 'UNKNOWN') AS qtd_unknown,
+    COUNT(*) FILTER (WHERE item IS NULL OR TRIM(item) = '') AS qtd_vazio
+FROM raw.cafe_sales
+
+UNION ALL
+
+SELECT
+    'quantity' AS coluna,
+    COUNT(*) FILTER (WHERE TRIM(quantity) = 'ERROR') AS qtd_error,
+    COUNT(*) FILTER (WHERE TRIM(quantity) = 'UNKNOWN') AS qtd_unknown,
+    COUNT(*) FILTER (WHERE quantity IS NULL OR TRIM(quantity) = '') AS qtd_vazio
+FROM raw.cafe_sales
+
+UNION ALL
+
+SELECT
+    'price_per_unit' AS coluna,
+    COUNT(*) FILTER (WHERE TRIM(price_per_unit) = 'ERROR') AS qtd_error,
+    COUNT(*) FILTER (WHERE TRIM(price_per_unit) = 'UNKNOWN') AS qtd_unknown,
+    COUNT(*) FILTER (WHERE price_per_unit IS NULL OR TRIM(price_per_unit) = '') AS qtd_vazio
+FROM raw.cafe_sales
+
+UNION ALL
+
+SELECT
+    'total_spent' AS coluna,
+    COUNT(*) FILTER (WHERE TRIM(total_spent) = 'ERROR') AS qtd_error,
+    COUNT(*) FILTER (WHERE TRIM(total_spent) = 'UNKNOWN') AS qtd_unknown,
+    COUNT(*) FILTER (WHERE total_spent IS NULL OR TRIM(total_spent) = '') AS qtd_vazio
+FROM raw.cafe_sales
+
+UNION ALL
+
+SELECT
+    'payment_method' AS coluna,
+    COUNT(*) FILTER (WHERE TRIM(payment_method) = 'ERROR') AS qtd_error,
+    COUNT(*) FILTER (WHERE TRIM(payment_method) = 'UNKNOWN') AS qtd_unknown,
+    COUNT(*) FILTER (WHERE payment_method IS NULL OR TRIM(payment_method) = '') AS qtd_vazio
+FROM raw.cafe_sales
+
+UNION ALL
+
+SELECT
+    'location' AS coluna,
+    COUNT(*) FILTER (WHERE TRIM(location) = 'ERROR') AS qtd_error,
+    COUNT(*) FILTER (WHERE TRIM(location) = 'UNKNOWN') AS qtd_unknown,
+    COUNT(*) FILTER (WHERE location IS NULL OR TRIM(location) = '') AS qtd_vazio
+FROM raw.cafe_sales
+
+UNION ALL
+
+SELECT
+    'transaction_date' AS coluna,
+    COUNT(*) FILTER (WHERE TRIM(transaction_date) = 'ERROR') AS qtd_error,
+    COUNT(*) FILTER (WHERE TRIM(transaction_date) = 'UNKNOWN') AS qtd_unknown,
+    COUNT(*) FILTER (WHERE transaction_date IS NULL OR TRIM(transaction_date) = '') AS qtd_vazio
+FROM raw.cafe_sales;
