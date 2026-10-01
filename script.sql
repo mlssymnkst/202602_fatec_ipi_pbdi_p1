@@ -235,23 +235,99 @@ SET    price_per_unit = (
         FROM   staging.cardapio c
         WHERE  c.item = t.item)
 WHERE  t.price_per_unit IS NULL
-  AND  t.item IN (SELECT item FROM staging.cardapio);
+    AND  t.item IN (SELECT item FROM staging.cardapio);
 -- Linhas afetadas: 479
 
 -- R2: preço nulo, quantidade e total conhecidos -> total / quantidade
 UPDATE staging.cafe_tipada
 SET price_per_unit = ROUND(total_spent / quantity, 2)
 WHERE price_per_unit IS NULL
-  AND quantity IS NOT NULL
-  AND quantity != 0
-  AND total_spent IS NOT NULL;
+    AND quantity IS NOT NULL
+    AND quantity != 0
+    AND total_spent IS NOT NULL;
 -- Linhas afetadas: 48
 
 -- R3: quantidade nula, preço e total conhecidos -> total / preço, arredondado para inteiro
 UPDATE staging.cafe_tipada
 SET quantity = CAST(ROUND(total_spent / price_per_unit) AS INTEGER)
 WHERE quantity IS NULL
-  AND price_per_unit IS NOT NULL
-  AND price_per_unit != 0
-  AND total_spent IS NOT NULL;
+    AND price_per_unit IS NOT NULL
+    AND price_per_unit != 0
+    AND total_spent IS NOT NULL;
 -- Linhas afetadas: 456
+
+-- R4: total nulo, quantidade e preço conhecidos -> quantidade x preço
+UPDATE staging.cafe_tipada
+SET    total_spent = quantity * price_per_unit
+WHERE  total_spent IS NULL
+    AND  quantity IS NOT NULL
+    AND  price_per_unit IS NOT NULL;
+-- Linhas afetadas: 479
+
+-- R5: item nulo e preço conhecido, pertencente a um único item do cardápio -> item com aquele preço
+UPDATE staging.cafe_tipada t
+SET    item = (SELECT c.item
+        FROM   staging.cardapio c
+        WHERE  c.price = t.price_per_unit)
+WHERE  t.item IS NULL
+    AND  t.price_per_unit IS NOT NULL
+    AND  (SELECT COUNT(*)
+        FROM   staging.cardapio c
+        WHERE  c.price = t.price_per_unit) = 1;
+-- Linhas afetadas: 489
+-- R6 (1/2): forma de pagamento nula -> 'Unknown'
+UPDATE staging.cafe_tipada
+SET    payment_method = 'Unknown'
+WHERE  payment_method IS NULL;
+-- Linhas afetadas: 3178
+
+-- R6 (2/2): local nulo -> 'Unknown'
+UPDATE staging.cafe_tipada
+SET    location = 'Unknown'
+WHERE  location IS NULL;
+-- Linhas afetadas: 3961
+
+/* ENUNCIADO 9
+Crie staging.cafe_sales com as mesmas colunas e tipos da Tabela 6, agora com NOT NULL
+em todas elas e com as restrições CHECK (quantity > 0) e CHECK (price_per_unit > 0).
+Carregue-a, precedida de TRUNCATE, apenas com as linhas de staging.cafe_tipada que
+não têm nenhum valor nulo. Escreva então uma consulta que devolva, em uma única linha,
+três colunas: linhas_tipada, linhas_limpas e descartadas. Registre os três números em
+comentário.
+*/
+
+-- 1) Tabela limpa
+DROP TABLE IF EXISTS staging.cafe_sales CASCADE;
+CREATE TABLE staging.cafe_sales(
+	transaction_id VARCHAR (20) PRIMARY KEY,
+	item VARCHAR(20) NOT NULL,
+	quantity INTEGER CHECK (quantity > 0) NOT NULL,
+	price_per_unit NUMERIC(6,2) CHECK (price_per_unit > 0) NOT NULL,
+	total_spent NUMERIC(8,2) NOT NULL,
+	payment_method VARCHAR(20) NOT NULL,
+	location VARCHAR (20) NOT NULL,
+	transaction_date DATE NOT NULL
+);
+
+-- 2) TRUNCATE staging.cafe_sales
+TRUNCATE TABLE staging.cafe_sales;
+
+-- 3) INSERT
+INSERT INTO staging.cafe_sales
+SELECT transaction_id, item, quantity, price_per_unit, total_spent,
+        payment_method, location, transaction_date 
+FROM staging.cafe_tipada
+WHERE transaction_id IS NOT NULL 
+	AND item IS NOT NULL
+	AND quantity IS NOT NULL
+	AND price_per_unit IS NOT NULL
+	AND total_spent IS NOT NULL
+	AND payment_method IS NOT NULL
+	AND location IS NOT NULL
+	AND transaction_date IS NOT NULL;
+
+-- 4) Contagem de linhas
+SELECT (SELECT COUNT(*) FROM staging.cafe_tipada) AS linhas_tipada,
+       (SELECT COUNT(*) FROM staging.cafe_sales)  AS linhas_limpas,
+       (SELECT COUNT(*) FROM staging.cafe_tipada) - (SELECT COUNT(*) FROM staging.cafe_sales) AS descartadas;
+-- Resultado: linhas_tipada = 10000 | linhas_limpas = 9064 | descartadas = 936
