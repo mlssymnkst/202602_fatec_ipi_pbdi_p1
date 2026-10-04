@@ -328,6 +328,149 @@ WHERE transaction_id IS NOT NULL
 
 -- 4) Contagem de linhas
 SELECT (SELECT COUNT(*) FROM staging.cafe_tipada) AS linhas_tipada,
-       (SELECT COUNT(*) FROM staging.cafe_sales)  AS linhas_limpas,
-       (SELECT COUNT(*) FROM staging.cafe_tipada) - (SELECT COUNT(*) FROM staging.cafe_sales) AS descartadas;
+    (SELECT COUNT(*) FROM staging.cafe_sales)  AS linhas_limpas,
+    (SELECT COUNT(*) FROM staging.cafe_tipada) - (SELECT COUNT(*) FROM staging.cafe_sales) AS descartadas;
 -- Resultado: linhas_tipada = 10000 | linhas_limpas = 9064 | descartadas = 936
+
+/*Enunciado 10 
+Consulte a menor e a maior data de venda registradas em staging.cafe_sales. Em seguida,
+crie dw.dim_date com as colunas da Figura 4 (date_sk inteiro no formato YYYYMMDD) e
+carregue-a com generate_series, gerando todos os dias dos anos completos que cobrem
+esse intervalo. Confira a quantidade de linhas geradas.*/
+
+-- Consulta Maior e Menor Data
+SELECT 
+    MIN(transaction_date) AS menor_data,
+    MAX(transaction_date) AS maior_data
+FROM staging.cafe_sales;
+
+-- Dimensão Date
+DROP TABLE IF EXISTS dw.dim_date CASCADE;
+CREATE TABLE dw.dim_date (
+    date_sk INTEGER PRIMARY KEY,
+    full_date DATE NOT NULL,
+    day SMALLINT NOT NULL,
+    month SMALLINT NOT NULL,
+    month_name VARCHAR(20) NOT NULL,
+    quarter SMALLINT NOT NULL,
+    year SMALLINT NOT NULL,
+    day_of_week CHAR(20) NOT NULL,
+    is_weekend BOOLEAN NOT NULL
+);
+
+INSERT INTO dw.dim_date 
+SELECT
+    CAST(TO_CHAR(d, 'YYYYMMDD') AS INTEGER),
+    d::DATE,
+    EXTRACT(DAY FROM d)::SMALLINT,
+    EXTRACT(MONTH FROM d)::SMALLINT,
+    TO_CHAR(d, 'TMMonth'),
+    EXTRACT(QUARTER FROM d)::SMALLINT,
+    EXTRACT(YEAR FROM d)::SMALLINT,
+    TO_CHAR(d, 'TMDay'),
+    EXTRACT(DOW FROM d) IN (0, 6)
+FROM GENERATE_SERIES(
+    DATE '2023-01-01',
+    DATE '2023-12-31',
+    INTERVAL '1 day'
+) AS g(d);
+-- Linhas afetadas: 365
+
+/*Enunciado 11 
+Crie e carregue dw.dim_item, dw.dim_payment e dw.dim_location, com chaves SERIAL e
+atributos descritivos UNIQUE. A carga usa DISTINCT sobre staging.cafe_sales; a category
+de dim_item vem de staging.cardapio. Confira as três dimensões em uma única consulta
+com UNION ALL: esperam-se 8 itens, 4 formas de pagamento e 3 locais, já incluído o valor
+'Unknown'.*/	
+
+-- Dimensão dim_item
+DROP TABLE IF EXISTS dw.dim_item CASCADE;
+CREATE TABLE dw.dim_item(
+	item_sk SERIAL PRIMARY KEY,
+	item VARCHAR(20) NOT NULL UNIQUE,
+	category VARCHAR(10) NOT NULL
+);
+
+-- Dimensão dim_payment
+DROP TABLE IF EXISTS dw.dim_payment CASCADE;
+CREATE TABLE dw.dim_payment(
+	payment_sk SERIAL PRIMARY KEY,
+	payment_method VARCHAR (20) NOT NULL UNIQUE
+);
+
+-- Dimensão dim_location
+DROP TABLE IF EXISTS dw.dim_location CASCADE;
+CREATE TABLE dw.dim_location(
+	location_sk SERIAL PRIMARY KEY,
+	location VARCHAR (20) NOT NULL UNIQUE
+);
+
+-- Populando dim_item 
+INSERT INTO dw.dim_item (item, category)
+SELECT DISTINCT
+	s.item, c.category
+FROM staging.cafe_sales s
+JOIN staging.cardapio c
+ON s.item = c.item;
+
+-- Populando dim_payment
+INSERT INTO dw.dim_payment (payment_method)
+SELECT DISTINCT
+    s.payment_method
+FROM staging.cafe_sales s;
+
+-- Populando dim_location
+INSERT INTO dw.dim_location (location)
+SELECT DISTINCT
+    s.location
+FROM staging.cafe_sales s;
+
+/*Enunciado 12
+Crie dw.fact_sales conforme a Figura 4: transaction_nk como chave primária (dimensão
+degenerada), chaves estrangeiras NOT NULL para as quatro dimensões, métricas NOT NULL e
+um índice por chave estrangeira. Carregue-a a partir de staging.cafe_sales, precedida de
+TRUNCATE: date_sk por formatação da data, sem JOIN; as outras três surrogate keys por JOIN
+com as dimensões. Por fim, escreva uma consulta que compare, lado a lado, a quantidade de
+linhas e a soma de total_spent da staging e da fato. Os dois pares devem ser iguais.*/
+
+
+-- Tabela fato
+DROP TABLE IF EXISTS dw.fact_sales CASCADE;
+
+CREATE TABLE dw.fact_sales(
+    transaction_nk VARCHAR(20) PRIMARY KEY,
+    date_sk INTEGER NOT NULL REFERENCES dw.dim_date(date_sk),
+    item_sk INTEGER NOT NULL REFERENCES dw.dim_item(item_sk),
+    payment_sk INTEGER NOT NULL REFERENCES dw.dim_payment(payment_sk),
+    location_sk INTEGER NOT NULL REFERENCES dw.dim_location(location_sk),
+    quantity INTEGER NOT NULL,
+    price_per_unit NUMERIC(6,2) NOT NULL,
+    total_spent NUMERIC(8,2) NOT NULL
+);
+
+TRUNCATE TABLE dw.fact_sales;
+
+INSERT INTO dw.fact_sales(transaction_nk, date_sk, item_sk, payment_sk, location_sk, quantity, price_per_unit, total_spent)
+SELECT
+    s.transaction_id,
+    CAST(TO_CHAR(s.transaction_date, 'YYYYMMDD') AS INTEGER),
+    di.item_sk,
+    dp.payment_sk,
+    dl.location_sk,
+    s.quantity,
+    s.price_per_unit,
+    s.total_spent
+FROM staging.cafe_sales s
+JOIN dw.dim_item di
+    ON di.item = s.item
+JOIN dw.dim_payment dp
+    ON dp.payment_method = s.payment_method
+JOIN dw.dim_location dl
+    ON dl.location = s.location;
+
+-- Consulta Validação linhas e soma 
+SELECT
+    (SELECT COUNT(*)FROM staging.cafe_sales) AS linhas_staging,
+    (SELECT COUNT(*) FROM dw.fact_sales) AS linhas_fato,
+    (SELECT SUM(total_spent) FROM staging.cafe_sales) AS soma_staging,
+    (SELECT SUM(total_spent) FROM dw.fact_sales) AS soma_fato;
