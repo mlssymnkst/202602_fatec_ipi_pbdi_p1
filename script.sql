@@ -395,7 +395,7 @@ CREATE TABLE dw.dim_item(
 DROP TABLE IF EXISTS dw.dim_payment CASCADE;
 CREATE TABLE dw.dim_payment(
 	payment_sk SERIAL PRIMARY KEY,
-	payment_method VARCHAR (20) NOT NULL UNIQUE
+	payment VARCHAR (20) NOT NULL UNIQUE
 );
 
 -- Dimensão dim_location
@@ -414,7 +414,7 @@ JOIN staging.cardapio c
 ON s.item = c.item;
 
 -- Populando dim_payment
-INSERT INTO dw.dim_payment (payment_method)
+INSERT INTO dw.dim_payment (payment)
 SELECT DISTINCT
     s.payment_method
 FROM staging.cafe_sales s;
@@ -464,7 +464,7 @@ FROM staging.cafe_sales s
 JOIN dw.dim_item di
     ON di.item = s.item
 JOIN dw.dim_payment dp
-    ON dp.payment_method = s.payment_method
+    ON dp.payment = s.payment_method
 JOIN dw.dim_location dl
     ON dl.location = s.location;
 
@@ -474,3 +474,84 @@ SELECT
     (SELECT COUNT(*) FROM dw.fact_sales) AS linhas_fato,
     (SELECT SUM(total_spent) FROM staging.cafe_sales) AS soma_staging,
     (SELECT SUM(total_spent) FROM dw.fact_sales) AS soma_fato;
+
+    
+/* ENUNCIADO 13
+Escreva um bloco anônimo PL/pgSQL (DO), sem criar função nem procedimento, que produza
+um ranking de receita para cada uma das três dimensões pequenas do DW: item, payment e
+location, nessa ordem, em uma única execução. Requisitos obrigatórios:
+a) deve existir um único cursor, não vinculado: declarado como REFCURSOR, sem consulta
+no DECLARE;
+b) o bloco percorre os nomes das três dimensões com um laço, à escolha do grupo, e, a cada
+volta, guarda o nome da dimensão da vez em uma variável;
+c) a cada volta, a consulta é dinâmica: um texto montado por concatenação com essa
+variável, que junta dw.fact_sales à tabela dw.dim_dimensão e devolve, para cada valor
+do atributo de mesmo nome, a quantidade de vendas e a receita (soma de total_spent),
+da maior para a menor receita;
+d) a cada volta, o cursor é aberto com OPEN ... FOR EXECUTE, percorrido com FETCH em um
+LOOP, com saída por EXIT WHEN NOT FOUND, e fechado com CLOSE antes de ser reaberto
+com a consulta da dimensão seguinte;
+e) antes de percorrer as dimensões, o bloco calcula a receita total da fato; a cada
+linha lida, emite um RAISE NOTICE no formato <dimensão> | <posição> - <valor>:
+<vendas> vendas, receita <receita> (<percentual>% do total), com o percentual
+arredondado para duas casas;
+f) ao terminar cada dimensão, emite um RAISE NOTICE com a quantidade de linhas lidas
+naquela dimensão; ao terminar as três, emite um último com o total de linhas lidas.
+Para cada dimensão, a soma dos percentuais exibidos deve ser 100%, com diferença apenas
+de arredondamento.*/
+DO $$
+DECLARE
+    cur_ranking      REFCURSOR; -- a) único cursor, não vinculado REFCURSOR
+    v_dimensoes      TEXT[] := ARRAY['item', 'payment', 'location']; -- b) nomes das três dimensões
+    v_dimensao       TEXT; -- b) dimensão da vez
+    v_consulta       TEXT;
+    v_valor          TEXT;
+    v_vendas         INT;
+    v_receita        NUMERIC(12,2);
+    v_receita_total  NUMERIC(12,2);
+    v_pct            NUMERIC(5,2);
+    v_posicao        INT;
+    v_linhas_total   INT := 0;
+
+BEGIN
+    SELECT SUM(total_spent) INTO v_receita_total FROM dw.fact_sales; 
+    -- e) antes de percorrer as dimensões, o bloco calcula a receita total da fato
+
+    FOREACH v_dimensao IN ARRAY v_dimensoes LOOP -- b) guarda o nome da dimensão da vez em v_dimensao
+        
+	v_consulta :=
+            'SELECT d.' || v_dimensao || '::TEXT AS valor, ' -- c)texto montado por concatenação com a variável
+            || 'COUNT(*) AS vendas, ' -- c) quantidade de vendas
+            || 'SUM(f.total_spent) AS receita ' -- c) receita
+            || 'FROM dw.fact_sales f '
+            || 'JOIN dw.dim_' || v_dimensao || ' d ' -- c)junta dw.fact_sales à tabela dw.dim_dimensão
+            || 'ON d.' || v_dimensao || '_sk = f.' || v_dimensao || '_sk '
+            || 'GROUP BY d.' || v_dimensao || ' '
+            || 'ORDER BY receita DESC'; -- c) da maior para a menor receita
+
+        OPEN cur_ranking FOR EXECUTE v_consulta; -- d) a cada volta, o cursor é aberto com OPEN
+        v_posicao := 0;
+
+        LOOP
+            FETCH cur_ranking INTO v_valor, v_vendas, v_receita; -- d)  percorrido com FETCH em um LOOP
+            EXIT WHEN NOT FOUND; -- d) com saída por EXIT WHEN NOT FOUND
+
+            v_posicao := v_posicao + 1;
+            v_pct := ROUND(v_receita * 100 / v_receita_total, 2);
+
+            RAISE NOTICE '% | % - %: % vendas, receita % (% do total)', v_dimensao, v_posicao, v_valor, v_vendas, v_receita, v_pct || '%'; 
+		-- e) RAISE NOTICE no formato <dimensão> | <posição> - <valor>: <vendas> vendas, receita <receita> (<percentual>% do total), com o percentual arredondado para duas casas;
+
+        END LOOP;
+
+        CLOSE cur_ranking; -- d) fechado com CLOSE antes de ser reaberto com a consulta da dimensão seguinte
+
+        RAISE NOTICE '% | linhas lidas: %', v_dimensao, v_posicao; 
+        v_linhas_total := v_linhas_total + v_posicao; -- f) RAISE NOTICE com a quantidade de linhas lidas naquela dimensão
+    
+	END LOOP;
+
+    RAISE NOTICE 'Total de linhas lidas nas três dimensões: %', v_linhas_total; -- f) emite um último com o total de linhas lidas
+END;
+$$;
+
