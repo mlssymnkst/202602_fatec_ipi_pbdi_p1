@@ -555,3 +555,43 @@ BEGIN
 END;
 $$;
 
+/* ENUNCIADO 14
+Mostre, para cada mês, o nome do mês, a quantidade de vendas, a receita e o ticket médio
+(arredondado para duas casas), em ordem cronológica.*/
+
+SELECT d.year AS Ano,
+	d.month_name AS Mês,
+	COUNT (*) As qtde_vendas,
+	SUM(f.total_spent) AS Receita,
+	ROUND(AVG(f.total_spent),2) AS ticket_médio
+FROM dw.fact_sales f
+JOIN dw.dim_date d ON d.date_sk = f.date_sk
+GROUP BY 1, d.month, 2
+ORDER BY 1, d.month;
+
+/* ENUNCIADO 15
+Mostre o ranking de itens: categoria, item, total de unidades vendidas e receita, da maior
+para a menor receita.*/
+
+SELECT i.category AS Categoria,
+	i.item AS Item,
+	SUM(f.quantity) AS Total_unidades,
+	SUM(f.total_spent) AS Receita
+FROM dw.fact_sales f
+JOIN dw.dim_item i ON i.item_sk = f.item_sk
+GROUP BY 1,2 
+ORDER BY 4 DESC;
+
+/* ENUNCIADO 16 
+Mostre, para cada dia da semana, se ele é fim de semana, a quantidade de vendas e a receita,
+da maior para a menor receita.*/
+
+SELECT d.day_of_week AS Dia_da_Semana,
+	d.is_weekend AS Final_de_Semana,
+	COUNT(*) AS qtde_vendas,
+	SUM(f.total_spent) AS Receita
+FROM dw.fact_sales f
+JOIN dw.dim_date d on d.date_sk = f.date_Sk
+GROUP BY 1, 2
+ORDER BY 4 DESC;
+
