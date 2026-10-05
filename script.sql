@@ -595,3 +595,91 @@ JOIN dw.dim_date d on d.date_sk = f.date_Sk
 GROUP BY 1, 2
 ORDER BY 4 DESC;
 
+
+/* ENUNCIADO 17
+Slice. Fixe o quarto trimestre e mostre a receita por item nesse trimestre. */
+
+SELECT i.item,
+    SUM(f.total_spent) AS receita
+
+FROM dw.fact_sales f
+JOIN dw.dim_date d ON d.date_sk = f.date_sk
+JOIN dw.dim_item i ON i.item_sk = f.item_sk
+
+WHERE d.quarter = 4
+GROUP BY 1
+ORDER BY 2 DESC;
+
+/* ENUNCIADO 18
+Dice. Restrinja o cubo à categoria 'Bebida', às formas de pagamento 'Cash' e 'Digital
+Wallet' e aos meses de janeiro a junho. Mostre a receita por item e forma de pagamento
+nesse recorte. */
+
+SELECT i.item,
+        p.payment,
+        SUM(f.total_spent) AS receita
+
+FROM dw.fact_sales f
+JOIN dw.dim_date    d ON d.date_sk    = f.date_sk
+JOIN dw.dim_item    i ON i.item_sk    = f.item_sk
+JOIN dw.dim_payment p ON p.payment_sk = f.payment_sk
+
+WHERE i.category = 'Bebida'
+    AND p.payment IN ('Cash', 'Digital Wallet')
+    AND d.month BETWEEN 1 AND 6
+GROUP BY 1, 2
+ORDER BY 1, 2;
+
+/* Enunciado 19
+Roll-up. Usando ROLLUP (category, item), mostre a receita por item, os subtotais por
+categoria e o total geral, exibindo 'TODAS' e 'TODOS' (com COALESCE) no lugar dos NULL das
+linhas de subtotal. Explique em comentário o que representa cada tipo de linha do resultado.*/
+
+SELECT
+    COALESCE(di.category, 'TODAS') AS category,
+    COALESCE(di.item, 'TODOS') AS item,
+    SUM(f.total_spent) AS receita
+FROM dw.fact_sales f
+JOIN dw.dim_item di
+    ON di.item_sk = f.item_sk
+GROUP BY ROLLUP (di.category, di.item)
+ORDER BY
+    di.category,
+    di.item;
+/* Tipos de linha do resultado do ROLLUP:
+
+    1) Linhas de detalhe (categoria e item preenchidos): receita de cada item individualmente.
+
+    2) Linhas de subtotal por categoria (categoria preenchida, item = 'TODOS'): soma da receita de todos os itens daquela categoria. É o primeiro nível de roll-up:
+        o item "sobe" para a categoria.
+
+    3) Linha de total geral (categoria = 'TODAS' e item = 'TODOS'): soma da receita de todas as vendas, sem nenhum agrupamento. É o topo da hierarquia.
+
+   Total de linhas: 8 itens + 2 subtotais de categoria + 1 total geral = 11. */
+
+/* Enunciado 20
+Cubo. Usando CUBE (location, payment), mostre a receita para todas as combinações
+de local e forma de pagamento, com os rótulos 'TODOS' nas linhas de subtotal. Registre em
+comentário quantas linhas o resultado tem e justifique esse número a partir da quantidade
+de valores de cada dimensão.*/
+
+SELECT
+    COALESCE(dl.location, 'TODOS') AS location,
+    COALESCE(dp.payment, 'TODOS')  AS payment,
+    SUM(f.total_spent)             AS receita
+FROM dw.fact_sales f
+JOIN dw.dim_location dl ON dl.location_sk = f.location_sk
+JOIN dw.dim_payment  dp ON dp.payment_sk  = f.payment_sk
+GROUP BY CUBE (dl.location, dp.payment)
+ORDER BY dl.location NULLS LAST, dp.payment NULLS LAST;
+
+/* O resultado tem 20 linhas.
+    Justificativa: location tem 3 valores (In-store, Takeaway, Unknown) e
+    payment tem 4 (Cash, Credit Card, Digital Wallet, Unknown). O CUBE gera
+    todas as combinações de agrupamento, e cada dimensão contribui com seus
+    valores mais o rótulo 'TODOS':
+        (3 + 1) x (4 + 1) = 20
+    - 12 linhas de detalhe (3 locais x 4 formas de pagamento);
+    -  4 linhas de subtotal por forma de pagamento (location = 'TODOS');
+    -  3 linhas de subtotal por local (payment = 'TODOS');
+   -  1 linha de total geral (ambos 'TODOS'). */
